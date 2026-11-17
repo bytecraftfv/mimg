@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Consulta MIMG & BD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @keyframes pulse-red {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .badge-atrasado {
+      animation: pulse-red 2s infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans text-slate-800 pb-12">
+
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-lg py-6 mb-8">
+    <div class="max-w-4xl mx-auto px-4 text-center">
+      <h1 class="text-3xl font-bold flex items-center justify-center gap-3">
+        <i class="fa-solid fa-wifi"></i> Consulta de Mantenimientos MIMG
+      </h1>
+      <p class="text-blue-100 text-sm mt-1">Evaluación de estado e infraestructura técnica</p>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4">
+    
+    <!-- Búsqueda -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-8 border border-slate-200">
+      <label for="loginInput" class="block font-semibold text-slate-700 mb-2 flex items-center gap-2">
+        <i class="fa-solid fa-magnifying-glass text-blue-600"></i> Buscar por LOGIN:
+      </label>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <input 
+            type="text" 
+            id="loginInput" 
+            list="loginsList"
+            placeholder="Ej: mimgf3-coopassabucaram" 
+            class="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+            onkeypress="checkEnter(event)"
+          >
+          <i class="fa-solid fa-terminal absolute left-3 top-3.5 text-slate-400"></i>
+          <datalist id="loginsList"></datalist>
+        </div>
+        <button 
+          onclick="realizarConsulta()" 
+          class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-lg shadow transition flex items-center justify-center gap-2"
+        >
+          <i class="fa-solid fa-search"></i> Consultar
+        </button>
+      </div>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="hidden text-center py-8">
+      <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+      <p class="text-slate-500 mt-2 font-medium">Evaluando mantenimientos y fechas en la BD...</p>
+    </div>
+
+    <!-- Alertas -->
+    <div id="mensajeAlert" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg mb-6 shadow-sm">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-xl"></i>
+        <p id="mensajeTexto" class="text-amber-800 font-medium"></p>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div id="resultadoCard" class="hidden bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+      
+      <!-- Banner Superior -->
+      <div class="bg-slate-800 text-white p-5 flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold block">LOGIN CONSULTADO</span>
+          <h2 id="resLogin" class="text-xl font-bold font-mono text-blue-400">---</h2>
+          <!-- Fecha de instalación informativa -->
+          <p class="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-normal">
+            <i class="fa-regular fa-calendar-days text-slate-400"></i> Instalado el: <span id="resBannerFecha" class="text-slate-300">---</span>
+          </p>
+        </div>
+        
+        <!-- Bloque Derecho del Banner (Estado Mantenimiento + Último registro + Riesgo) -->
+        <div class="flex flex-col items-end">
+          <div class="flex flex-wrap items-center gap-3 justify-end">
+            <!-- Badge Siguiente Mantenimiento -->
+            <div id="badgeMnt" class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 shadow">
+              <i id="iconMnt" class="fa-solid fa-clipboard-check"></i> <span id="resSiguienteMnt">---</span>
+            </div>
+            <!-- Badge Riesgo -->
+            <div id="badgeRiesgo" class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2">
+              <i class="fa-solid fa-shield-halved"></i> <span id="resRiesgo">---</span>
+            </div>
+          </div>
+          <!-- Texto pequeño informativo debajo del estado de mantenimiento -->
+          <p id="txtUltimoMntContainer" class="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 font-normal hidden">
+            <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Último mantenimiento registrado: <span id="resUltimaFechaMnt" class="text-slate-300">---</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Cuadrícula de Datos -->
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Fila 1 Izquierda: NODO WIFI -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-blue-100 text-blue-600 rounded-lg"><i class="fa-solid fa-network-wired text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase">Nodo Wifi</p>
+            <p id="resNodo" class="font-medium text-slate-800 mt-0.5 font-mono text-sm">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 1 Derecha: SECTOR -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-emerald-100 text-emerald-600 rounded-lg"><i class="fa-solid fa-city text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase">Sector</p>
+            <p id="resSector" class="font-medium text-slate-800 mt-0.5">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 2 Izquierda: DIRECCIÓN MAC -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-purple-100 text-purple-600 rounded-lg"><i class="fa-solid fa-microchip text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase">Dirección MAC</p>
+            <p id="resMac" class="font-medium text-slate-800 mt-0.5 font-mono text-sm">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 2 Derecha: FECHA DE INSTALACIÓN -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-teal-100 text-teal-600 rounded-lg"><i class="fa-solid fa-calendar-day text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase">Fecha de Instalación</p>
+            <p id="resFecha" class="font-medium text-slate-800 mt-0.5">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 3 Izquierda: MODELO AP (con Tipo informativo) -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-indigo-100 text-indigo-600 rounded-lg"><i class="fa-solid fa-server text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase">Modelo AP</p>
+            <p id="resModeloAp" class="font-medium text-slate-800 mt-0.5">---</p>
+            <p class="text-[11px] text-slate-400 mt-0.5 italic">Tipo: <span id="resTipoInformativo">---</span></p>
+          </div>
+        </div>
+
+        <!-- Fila 3 Derecha: # DE POSTE -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-orange-100 text-orange-600 rounded-lg"><i class="fa-solid fa-utility-pole text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase"># de Poste</p>
+            <p id="resPoste" class="font-medium text-slate-800 mt-0.5">---</p>
+            <p id="txtFechaProgramada" class="text-[11px] text-slate-400 mt-0.5 hidden">Fecha programada: <span id="resFechaEstimada">---</span></p>
+          </div>
+        </div>
+
+        <!-- Fila 4: DIRECCIÓN (Ancho completo) -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100 md:col-span-2">
+          <div class="p-3 bg-rose-100 text-rose-600 rounded-lg"><i class="fa-solid fa-map-location-dot text-xl"></i></div>
+          <div class="flex-1">
+            <p class="text-xs text-slate-500 font-semibold uppercase">Dirección</p>
+            <p id="resDireccion" class="font-medium text-slate-800 mt-0.5">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 5: COORDENADAS (Ancho completo) -->
+        <div class="flex items-start justify-between gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100 md:col-span-2">
+          <div class="flex items-center gap-4">
+            <div class="p-3 bg-cyan-100 text-cyan-600 rounded-lg"><i class="fa-solid fa-location-crosshairs text-xl"></i></div>
+            <div>
+              <p class="text-xs text-slate-500 font-semibold uppercase">Coordenadas</p>
+              <p id="resCoordenadas" class="font-medium text-slate-800 mt-0.5 font-mono text-sm">---</p>
+            </div>
+          </div>
+          <a id="btnMapas" href="#" target="_blank" class="hidden self-center bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition flex items-center gap-2">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver en Maps
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    window.onload = function() {
+      google.script.run
+        .withSuccessHandler(function(logins) {
+          var datalist = document.getElementById('loginsList');
+          logins.forEach(function(login) {
+            var option = document.createElement('option');
+            option.value = login;
+            datalist.appendChild(option);
+          });
+        })
+        .obtenerListaLogins();
+    };
+
+    function checkEnter(event) {
+      if (event.key === 'Enter') { realizarConsulta(); }
+    }
+
+    function realizarConsulta() {
+      var login = document.getElementById('loginInput').value.trim();
+      var loader = document.getElementById('loader');
+      var alertBox = document.getElementById('mensajeAlert');
+      var alertText = document.getElementById('mensajeTexto');
+      var resCard = document.getElementById('resultadoCard');
+      
+      if (!login) {
+        alertText.innerText = 'Por favor, ingrese un número o código de LOGIN.';
+        alertBox.classList.remove('hidden');
+        resCard.classList.add('hidden');
+        return;
+      }
+
+      alertBox.classList.add('hidden');
+      resCard.classList.add('hidden');
+      loader.classList.remove('hidden');
+
+      google.script.run
+        .withSuccessHandler(function(respuesta) {
+          loader.classList.add('hidden');
+          
+          if (respuesta.exito) {
+            var d = respuesta.data;
+            var mnt = d.evaluacionMnt;
+            
+            document.getElementById('resLogin').innerText = d.login || 'N/A';
+            document.getElementById('resBannerFecha').innerText = d.fechaInstalacion || 'N/A';
+            document.getElementById('resNodo').innerText = d.nodoWifi || 'N/A';
+            document.getElementById('resSector').innerText = d.sector || 'N/A';
+            document.getElementById('resRiesgo').innerText = d.riesgo || 'N/A';
+            document.getElementById('resMac').innerText = d.mac || 'N/A';
+            document.getElementById('resModeloAp').innerText = d.modeloAp || 'N/A';
+            document.getElementById('resTipoInformativo').innerText = d.tipoAp || 'N/A';
+            document.getElementById('resFecha').innerText = d.fechaInstalacion || 'N/A';
+            document.getElementById('resPoste').innerText = d.numPoste || 'N/A';
+            document.getElementById('resDireccion').innerText = d.direccion || 'N/A';
+            document.getElementById('resCoordenadas').innerText = d.coordenadas || 'N/A';
+
+            // Configuración del Badge de Mantenimiento
+            var badgeMnt = document.getElementById('badgeMnt');
+            var iconMnt = document.getElementById('iconMnt');
+            document.getElementById('resSiguienteMnt').innerText = mnt.textoBadge;
+
+            if (mnt.atrasado) {
+              badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-red-600 text-white shadow badge-atrasado";
+              iconMnt.className = "fa-solid fa-triangle-exclamation text-amber-300";
+            } else {
+              badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-blue-600 text-white shadow";
+              iconMnt.className = "fa-solid fa-clipboard-check";
+            }
+
+            // Último mantenimiento registrado en el banner
+            var txtUltimoMntContainer = document.getElementById('txtUltimoMntContainer');
+            if (mnt.ultimaFechaStr) {
+              document.getElementById('resUltimaFechaMnt').innerText = mnt.ultimaFechaStr;
+              txtUltimoMntContainer.classList.remove('hidden');
+            } else {
+              txtUltimoMntContainer.classList.add('hidden');
+            }
+
+            // Fecha programada estimada (6 meses después) en la tarjeta de Poste
+            var txtFechaProgramada = document.getElementById('txtFechaProgramada');
+            if (mnt.fechaEstimada) {
+              document.getElementById('resFechaEstimada').innerText = mnt.fechaEstimada;
+              txtFechaProgramada.classList.remove('hidden');
+            } else {
+              txtFechaProgramada.classList.add('hidden');
+            }
+
+            // Badge de Riesgo
+            var badgeRiesgo = document.getElementById('badgeRiesgo');
+            var riesgoTxt = (d.riesgo || '').toString().toUpperCase();
+            if (riesgoTxt.includes('ALTO')) {
+              badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-red-600 text-white shadow";
+            } else if (riesgoTxt.includes('BAJO')) {
+              badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-emerald-600 text-white shadow";
+            } else {
+              badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-slate-600 text-white shadow";
+            }
+
+            // Google Maps
+            var btnMapas = document.getElementById('btnMapas');
+            if (d.coordenadas && d.coordenadas.includes(',')) {
+              btnMapas.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(d.coordenadas);
+              btnMapas.classList.remove('hidden');
+            } else {
+              btnMapas.classList.add('hidden');
+            }
+
+            resCard.classList.remove('hidden');
+          } else {
+            alertText.innerText = respuesta.mensaje;
+            alertBox.classList.remove('hidden');
+          }
+        })
+        .withFailureHandler(function(err) {
+          loader.classList.add('hidden');
+          alertText.innerText = 'Error al consultar el servidor: ' + err.message;
+          alertBox.classList.remove('hidden');
+        })
+        .buscarPorLogin(login);
+    }
+  </script>
+</body>
+</html>
