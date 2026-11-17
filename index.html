@@ -145,4 +145,175 @@
           <div class="p-3 bg-indigo-100 text-indigo-600 rounded-lg"><i class="fa-solid fa-server text-xl"></i></div>
           <div>
             <p class="text-xs text-slate-500 font-semibold uppercase">Modelo AP</p>
-            <p id="resModeloAp" class="font-medium text-slate-800 mt-0.
+            <p id="resModeloAp" class="font-medium text-slate-800 mt-0.5">---</p>
+            <p class="text-[11px] text-slate-400 mt-0.5 italic">Tipo: <span id="resTipoInformativo">---</span></p>
+          </div>
+        </div>
+
+        <!-- Fila 3 Derecha: # DE POSTE -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+          <div class="p-3 bg-orange-100 text-orange-600 rounded-lg"><i class="fa-solid fa-utility-pole text-xl"></i></div>
+          <div>
+            <p class="text-xs text-slate-500 font-semibold uppercase"># de Poste</p>
+            <p id="resPoste" class="font-medium text-slate-800 mt-0.5">---</p>
+            <p id="txtFechaProgramada" class="text-[11px] text-slate-400 mt-0.5 hidden">Fecha programada: <span id="resFechaEstimada">---</span></p>
+          </div>
+        </div>
+
+        <!-- Fila 4: DIRECCIÓN (Ancho completo) -->
+        <div class="flex items-start gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100 md:col-span-2">
+          <div class="p-3 bg-rose-100 text-rose-600 rounded-lg"><i class="fa-solid fa-map-location-dot text-xl"></i></div>
+          <div class="flex-1">
+            <p class="text-xs text-slate-500 font-semibold uppercase">Dirección</p>
+            <p id="resDireccion" class="font-medium text-slate-800 mt-0.5">---</p>
+          </div>
+        </div>
+
+        <!-- Fila 5: COORDENADAS (Ancho completo) -->
+        <div class="flex items-start justify-between gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100 md:col-span-2">
+          <div class="flex items-center gap-4">
+            <div class="p-3 bg-cyan-100 text-cyan-600 rounded-lg"><i class="fa-solid fa-location-crosshairs text-xl"></i></div>
+            <div>
+              <p class="text-xs text-slate-500 font-semibold uppercase">Coordenadas</p>
+              <p id="resCoordenadas" class="font-medium text-slate-800 mt-0.5 font-mono text-sm">---</p>
+            </div>
+          </div>
+          <a id="btnMapas" href="#" target="_blank" class="hidden self-center bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition flex items-center gap-2">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver en Maps
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // URL de tu Webhook de Producción en n8n
+    const WEBHOOK_URL = "https://n8n.tecnico.prod.i.telconet.net/webhook/buscar-mantenimiento";
+
+    // Al cargar la página, comprueba si viene un parámetro ?login= en la URL
+    window.onload = function() {
+      const params = new URLSearchParams(window.location.search);
+      const loginParam = params.get("login");
+      if (loginParam) {
+        document.getElementById('loginInput').value = loginParam;
+        realizarConsulta(loginParam);
+      }
+    };
+
+    function checkEnter(event) {
+      if (event.key === 'Enter') { realizarConsulta(); }
+    }
+
+    async function realizarConsulta(loginOverride) {
+      var login = loginOverride || document.getElementById('loginInput').value.trim();
+      var loader = document.getElementById('loader');
+      var alertBox = document.getElementById('mensajeAlert');
+      var alertText = document.getElementById('mensajeTexto');
+      var resCard = document.getElementById('resultadoCard');
+      
+      if (!login) {
+        alertText.innerText = 'Por favor, ingrese un número o código de LOGIN.';
+        alertBox.classList.remove('hidden');
+        resCard.classList.add('hidden');
+        return;
+      }
+
+      alertBox.classList.add('hidden');
+      resCard.classList.add('hidden');
+      loader.classList.remove('hidden');
+
+      try {
+        const response = await fetch(`${WEBHOOK_URL}?login=${encodeURIComponent(login)}`);
+        loader.classList.add('hidden');
+
+        if (!response.ok) {
+          throw new Error(`Error en el servidor (${response.status})`);
+        }
+
+        const respuesta = await response.json();
+        
+        if (respuesta && respuesta.exito && respuesta.data) {
+          var d = respuesta.data;
+          var mnt = d.evaluacionMnt || {};
+          
+          document.getElementById('resLogin').innerText = d.login || 'N/A';
+          document.getElementById('resBannerFecha').innerText = d.fechaInstalacion || 'N/A';
+          document.getElementById('resNodo').innerText = d.nodoWifi || 'N/A';
+          document.getElementById('resSector').innerText = d.sector || 'N/A';
+          document.getElementById('resRiesgo').innerText = d.riesgo || 'N/A';
+          document.getElementById('resMac').innerText = d.mac || 'N/A';
+          document.getElementById('resModeloAp').innerText = d.modeloAp || 'N/A';
+          document.getElementById('resTipoInformativo').innerText = d.tipoAp || 'N/A';
+          document.getElementById('resFecha').innerText = d.fechaInstalacion || 'N/A';
+          document.getElementById('resPoste').innerText = d.numPoste || 'N/A';
+          document.getElementById('resDireccion').innerText = d.direccion || 'N/A';
+          document.getElementById('resCoordenadas').innerText = d.coordenadas || 'N/A';
+
+          // Configuración del Badge de Mantenimiento
+          var badgeMnt = document.getElementById('badgeMnt');
+          var iconMnt = document.getElementById('iconMnt');
+          document.getElementById('resSiguienteMnt').innerText = mnt.textoBadge || mnt.estado || '---';
+
+          if (mnt.atrasado) {
+            badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-red-600 text-white shadow badge-atrasado";
+            iconMnt.className = "fa-solid fa-triangle-exclamation text-amber-300";
+          } else {
+            badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-blue-600 text-white shadow";
+            iconMnt.className = "fa-solid fa-clipboard-check";
+          }
+
+          // Último mantenimiento registrado en el banner
+          var txtUltimoMntContainer = document.getElementById('txtUltimoMntContainer');
+          if (mnt.ultimaFechaStr) {
+            document.getElementById('resUltimaFechaMnt').innerText = mnt.ultimaFechaStr;
+            txtUltimoMntContainer.classList.remove('hidden');
+          } else {
+            txtUltimoMntContainer.classList.add('hidden');
+          }
+
+          // Fecha programada estimada (6 meses después) en la tarjeta de Poste
+          var txtFechaProgramada = document.getElementById('txtFechaProgramada');
+          if (mnt.fechaEstimada) {
+            document.getElementById('resFechaEstimada').innerText = mnt.fechaEstimada;
+            txtFechaProgramada.classList.remove('hidden');
+          } else {
+            txtFechaProgramada.classList.add('hidden');
+          }
+
+          // Badge de Riesgo
+          var badgeRiesgo = document.getElementById('badgeRiesgo');
+          var riesgoTxt = (d.riesgo || '').toString().toUpperCase();
+          if (riesgoTxt.includes('ALTO')) {
+            badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-red-600 text-white shadow";
+          } else if (riesgoTxt.includes('BAJO')) {
+            badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-emerald-600 text-white shadow";
+          } else {
+            badgeRiesgo.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-slate-600 text-white shadow";
+          }
+
+          // Google Maps
+          var btnMapas = document.getElementById('btnMapas');
+          if (d.coordenadas && d.coordenadas.includes(',')) {
+            const coordsClean = d.coordenadas.replace(/\s+/g, "");
+            btnMapas.href = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(coordsClean);
+            btnMapas.classList.remove('hidden');
+          } else {
+            btnMapas.classList.add('hidden');
+          }
+
+          resCard.classList.remove('hidden');
+        } else {
+          alertText.innerText = respuesta.mensaje || `No se encontró ningún equipo registrado con el login "${login}".`;
+          alertBox.classList.remove('hidden');
+        }
+
+      } catch (err) {
+        loader.classList.add('hidden');
+        alertText.innerText = 'Error al consultar el servidor n8n: ' + err.message;
+        alertBox.classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
