@@ -39,7 +39,7 @@
           <input 
             type="text" 
             id="loginInput" 
-            placeholder="Ej: mimgf3-coopassabucaram" 
+            placeholder="Ej: mimg-hospbicentepensionado" 
             class="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
             onkeypress="checkEnter(event)"
           >
@@ -156,7 +156,7 @@
           <div>
             <p class="text-xs text-slate-500 font-semibold uppercase"># de Poste</p>
             <p id="resPoste" class="font-medium text-slate-800 mt-0.5">---</p>
-            <p id="txtFechaProgramada" class="text-[11px] text-slate-400 mt-0.5 hidden">Fecha programada: <span id="resFechaEstimada">---</span></p>
+            <p id="txtFechaProgramada" class="text-[11px] text-slate-400 mt-0.5 hidden">Próximo mantenimiento: <span id="resFechaEstimada">---</span></p>
           </div>
         </div>
 
@@ -231,51 +231,64 @@
           throw new Error(`Error en el servidor (${response.status})`);
         }
 
-        const respuesta = await response.json();
+        const rawData = await response.json();
+        // Si n8n devuelve un arreglo [ { encontrado: true, ... } ], extraemos el primer elemento
+        const respuesta = Array.isArray(rawData) ? rawData[0] : rawData;
         
-        if (respuesta && respuesta.exito && respuesta.data) {
-          var d = respuesta.data;
-          var mnt = d.evaluacionMnt || {};
+        if (respuesta && respuesta.encontrado && respuesta.datos_ap) {
+          var d = respuesta.datos_ap;
+          var ultimoMnt = respuesta.ultimo_mantenimiento || null;
+          var estadoMnt = (respuesta.estado || 'PENDIENTE').toUpperCase();
           
           document.getElementById('resLogin').innerText = d.login || 'N/A';
-          document.getElementById('resBannerFecha').innerText = d.fechaInstalacion || 'N/A';
-          document.getElementById('resNodo').innerText = d.nodoWifi || 'N/A';
+          document.getElementById('resBannerFecha').innerText = d.fecha_instalacion || 'N/A';
+          document.getElementById('resNodo').innerText = d.nodo_wifi || 'N/A';
           document.getElementById('resSector').innerText = d.sector || 'N/A';
           document.getElementById('resRiesgo').innerText = d.riesgo || 'N/A';
           document.getElementById('resMac').innerText = d.mac || 'N/A';
-          document.getElementById('resModeloAp').innerText = d.modeloAp || 'N/A';
-          document.getElementById('resTipoInformativo').innerText = d.tipoAp || 'N/A';
-          document.getElementById('resFecha').innerText = d.fechaInstalacion || 'N/A';
-          document.getElementById('resPoste').innerText = d.numPoste || 'N/A';
+          document.getElementById('resModeloAp').innerText = d.modelo_ap || 'N/A';
+          document.getElementById('resTipoInformativo').innerText = d.tipo_ap || 'N/A';
+          document.getElementById('resFecha').innerText = d.fecha_instalacion || 'N/A';
+          document.getElementById('resPoste').innerText = d.de_poste || 'N/A';
           document.getElementById('resDireccion').innerText = d.direccion || 'N/A';
           document.getElementById('resCoordenadas').innerText = d.coordenadas || 'N/A';
 
-          // Configuración del Badge de Mantenimiento
+          // Configuración del Badge de Mantenimiento ("AL DÍA", "PENDIENTE", "ATRASADO")
           var badgeMnt = document.getElementById('badgeMnt');
           var iconMnt = document.getElementById('iconMnt');
-          document.getElementById('resSiguienteMnt').innerText = mnt.textoBadge || mnt.estado || '---';
+          document.getElementById('resSiguienteMnt').innerText = estadoMnt;
 
-          if (mnt.atrasado) {
+          if (estadoMnt === 'ATRASADO') {
             badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-red-600 text-white shadow badge-atrasado";
             iconMnt.className = "fa-solid fa-triangle-exclamation text-amber-300";
+          } else if (estadoMnt === 'AL DÍA') {
+            badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-emerald-600 text-white shadow";
+            iconMnt.className = "fa-solid fa-circle-check";
           } else {
-            badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-blue-600 text-white shadow";
-            iconMnt.className = "fa-solid fa-clipboard-check";
+            // PENDIENTE
+            badgeMnt.className = "px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-2 bg-amber-500 text-white shadow";
+            iconMnt.className = "fa-solid fa-clock";
           }
 
           // Último mantenimiento registrado en el banner
           var txtUltimoMntContainer = document.getElementById('txtUltimoMntContainer');
-          if (mnt.ultimaFechaStr) {
-            document.getElementById('resUltimaFechaMnt').innerText = mnt.ultimaFechaStr;
-            txtUltimoMntContainer.classList.remove('hidden');
+          if (ultimoMnt) {
+            var fechaReg = ultimoMnt.fecha_mantenimiento || ultimoMnt.fecha || (ultimoMnt.created_at ? ultimoMnt.created_at.split('T')[0] : null);
+            if (fechaReg) {
+              document.getElementById('resUltimaFechaMnt').innerText = fechaReg;
+              txtUltimoMntContainer.classList.remove('hidden');
+            } else {
+              txtUltimoMntContainer.classList.add('hidden');
+            }
           } else {
-            txtUltimoMntContainer.classList.add('hidden');
+            document.getElementById('resUltimaFechaMnt').innerText = 'Sin registros previos';
+            txtUltimoMntContainer.classList.remove('hidden');
           }
 
-          // Fecha programada estimada (6 meses después) en la tarjeta de Poste
+          // Próxima fecha programada en la tarjeta de Poste
           var txtFechaProgramada = document.getElementById('txtFechaProgramada');
-          if (mnt.fechaEstimada) {
-            document.getElementById('resFechaEstimada').innerText = mnt.fechaEstimada;
+          if (respuesta.proxima_fecha) {
+            document.getElementById('resFechaEstimada').innerText = respuesta.proxima_fecha;
             txtFechaProgramada.classList.remove('hidden');
           } else {
             txtFechaProgramada.classList.add('hidden');
@@ -304,7 +317,7 @@
 
           resCard.classList.remove('hidden');
         } else {
-          alertText.innerText = respuesta.mensaje || `No se encontró ningún equipo registrado con el login "${login}".`;
+          alertText.innerText = (respuesta && respuesta.mensaje) ? respuesta.mensaje : `No se encontró ningún equipo registrado con el login "${login}".`;
           alertBox.classList.remove('hidden');
         }
 
